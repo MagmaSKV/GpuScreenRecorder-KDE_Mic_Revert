@@ -1,0 +1,18 @@
+# Archivos temporales
+*.pkg.tar.zst
+*.log
+__pycache__/
+*.pyc
+
+# Archivos de build local
+last_version.txt
+PKGBUILD.official
+
+# Directorios de trabajo
+/build/
+/pkg/
+/src/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
