@@ -119,34 +119,44 @@ jobs:
           # Descargar el PKGBUILD oficial
           curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD
           
-          # Modificar el PKGBUILD
-          # Añadir función prepare() con el revert del commit
-          cat >> /tmp/prepare_func << 'EOF'
+          # NO cambiar el nombre del paquete (mantener gpu-screen-recorder)
+          # sed -i 's/^pkgname=.../' NO SE HACE
+          
+          # Cambiar pkgrel para que sea diferente al oficial
+          # El oficial usa pkgrel=1, nosotros usamos pkgrel=1.custom o similar
+          sed -i 's/^pkgrel=1/pkgrel=1.custom/' PKGBUILD
+          
+          # Añadir provides y conflicts (opcional pero recomendado)
+          sed -i '/^pkgrel=/a provides=("gpu-screen-recorder")\nconflicts=("gpu-screen-recorder")' PKGBUILD
+          
+          # Añadir optimizaciones x86-64-v3
+          sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
+          
+          # Crear la función prepare()
+          cat > /tmp/prepare_func << 'EOF'
+          
           prepare() {
-            cd "\$srcdir/\$pkgname"
+            cd "$srcdir/gpu-screen-recorder"
             echo "Revertiendo commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f..."
             git revert --no-commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f || echo "El revert falló, continuando..."
           }
           EOF
           
-          # Insertar prepare() antes de build()
-          awk '/^build\(\)/ {print "prepare() {\n  cd \"$srcdir/$pkgname\"\n  git revert --no-commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f || true\n}\n"}1' PKGBUILD > PKGBUILD.tmp
+          # Insertar la función prepare() antes de build()
+          awk -v prep="$(cat /tmp/prepare_func)" '
+            /^build\(\)/ {
+              print prep
+              print ""
+            }
+            { print }
+          ' PKGBUILD > PKGBUILD.tmp
           mv PKGBUILD.tmp PKGBUILD
           
-          # Añadir optimizaciones x86-64-v3
-          sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
-          
-          # Cambiar nombre del paquete
-          sed -i 's/^pkgname=gpu-screen-recorder/pkgname=gpu-screen-recorder-mic/' PKGBUILD
-          
-          # Cambiar pkgrel para evitar conflictos
-          sed -i 's/^pkgrel=.*/pkgrel=1/' PKGBUILD
-          
-          # Mostrar PKGBUILD para debug
+          # Verificar que el PKGBUILD quedo bien
           echo "=== PKGBUILD modificado ==="
-          cat PKGBUILD
+          grep -E "pkgname|pkgver|pkgrel|prepare|build" PKGBUILD | head -20
           
-          # Construir
+          # Construir como usuario builder
           chown -R builder:builder .
           sudo -u builder makepkg -s --noconfirm
           
