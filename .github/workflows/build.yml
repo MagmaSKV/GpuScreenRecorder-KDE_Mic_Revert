@@ -124,7 +124,7 @@ jobs:
           
           # Cambiar pkgrel para que sea diferente al oficial
           # El oficial usa pkgrel=1, nosotros usamos pkgrel=1.custom o similar
-          sed -i 's/^pkgrel=1/pkgrel=1.custom/' PKGBUILD
+          sed -i 's/^pkgrel=1/pkgrel=999/' PKGBUILD
           
           # Añadir provides y conflicts (opcional pero recomendado)
           sed -i '/^pkgrel=/a provides=("gpu-screen-recorder")\nconflicts=("gpu-screen-recorder")' PKGBUILD
