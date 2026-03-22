@@ -2,13 +2,13 @@ name: Build GPU Screen Recorder with Mic Icon
 
 on:
   schedule:
-    # Ejecutar cada 6 horas para detectar nuevas versiones
     - cron: '0 */6 * * *'
-  workflow_dispatch:  # Permitir ejecución manual
+  workflow_dispatch:
 
 permissions:
   contents: write
   packages: write
+  actions: read
 
 jobs:
   check-version:
@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Get latest version from Arch PKGBUILD
         id: get-version
@@ -31,7 +33,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Versión encontrada: $VERSION"
           
-          # Guardar la versión actual publicada
+          # Leer la versión anterior si existe
           if [ -f "last_version.txt" ]; then
             LAST_VERSION=$(cat last_version.txt)
             echo "last_version=$LAST_VERSION" >> $GITHUB_OUTPUT
@@ -45,7 +47,7 @@ jobs:
           VERSION="${{ steps.get-version.outputs.version }}"
           LAST_VERSION="${{ steps.get-version.outputs.last_version }}"
           
-          if [ "$VERSION" != "$LAST_VERSION" ] && [ -n "$VERSION" ]; then
+          if [ -n "$VERSION" ] && [ "$VERSION" != "$LAST_VERSION" ]; then
             echo "should-build=true" >> $GITHUB_OUTPUT
             echo "Nueva versión detectada: $VERSION (anterior: $LAST_VERSION)"
           else
@@ -59,7 +61,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
-      options: --privileged
     
     steps:
       - name: Checkout
@@ -67,7 +68,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Arch Linux build environment
+      - name: Setup build environment
         run: |
           pacman -Syu --noconfirm
           pacman -S --noconfirm \
@@ -95,10 +96,10 @@ jobs:
             python \
             gcc \
             ninja
+          
           # Crear usuario no root para makepkg
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          chown -R builder:builder /__w
 
       - name: Get latest version
         id: version
@@ -109,6 +110,7 @@ jobs:
           echo "Compilando versión: $VERSION"
 
       - name: Build package with patch
+        id: build
         run: |
           # Crear directorio de trabajo
           mkdir -p /home/builder/build
@@ -117,50 +119,61 @@ jobs:
           # Descargar el PKGBUILD oficial
           curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD
           
-          # Modificar el PKGBUILD para añadir el parche
-          cat >> /tmp/patch_content << 'EOF'
-          # === PARCHE PARA RESTAURAR ÍCONO DEL MICRÓFONO ===
-          # Aplicar revert del commit que eliminó la funcionalidad
+          # Modificar el PKGBUILD
+          # Añadir función prepare() con el revert del commit
+          cat >> /tmp/prepare_func << 'EOF'
           prepare() {
-            cd "$srcdir/$pkgname"
-            # Revertir el commit específico
-            git revert --no-commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f || true
+            cd "\$srcdir/\$pkgname"
+            echo "Revertiendo commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f..."
+            git revert --no-commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f || echo "El revert falló, continuando..."
           }
           EOF
           
-          # Insertar la función prepare() después de las variables
-          sed -i '/^build()/i '"$(cat /tmp/patch_content)" PKGBUILD
+          # Insertar prepare() antes de build()
+          awk '/^build\(\)/ {print "prepare() {\n  cd \"$srcdir/$pkgname\"\n  git revert --no-commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f || true\n}\n"}1' PKGBUILD > PKGBUILD.tmp
+          mv PKGBUILD.tmp PKGBUILD
           
-          # Añadir optimizaciones x86-64-v3 (como CachyOS)
+          # Añadir optimizaciones x86-64-v3
           sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
           
-          # Cambiar el nombre del paquete para evitar conflictos
+          # Cambiar nombre del paquete
           sed -i 's/^pkgname=gpu-screen-recorder/pkgname=gpu-screen-recorder-mic/' PKGBUILD
           
-          # Construir como usuario builder
+          # Cambiar pkgrel para evitar conflictos
+          sed -i 's/^pkgrel=.*/pkgrel=1/' PKGBUILD
+          
+          # Mostrar PKGBUILD para debug
+          echo "=== PKGBUILD modificado ==="
+          cat PKGBUILD
+          
+          # Construir
           chown -R builder:builder .
           sudo -u builder makepkg -s --noconfirm
           
-          # Copiar los paquetes compilados
-          cp *.pkg.tar.zst /__w/_temp/ || true
-          cp *.pkg.tar.zst /__w/_temp/
+          # Listar paquetes generados
+          ls -la *.pkg.tar.zst
           
           # Guardar nombre del archivo
           PKG_FILE=$(ls *.pkg.tar.zst 2>/dev/null | head -1)
           echo "pkg_file=$PKG_FILE" >> $GITHUB_OUTPUT
+          
+          # Copiar para el release
+          mkdir -p /tmp/artifacts
+          cp *.pkg.tar.zst /tmp/artifacts/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: gpu-screen-recorder-mic
-          path: /home/builder/build/*.pkg.tar.zst
+          path: /tmp/artifacts/*.pkg.tar.zst
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: GPU Screen Recorder Mic v${{ steps.version.outputs.version }}
-          files: /home/builder/build/*.pkg.tar.zst
+          files: /tmp/artifacts/*.pkg.tar.zst
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
