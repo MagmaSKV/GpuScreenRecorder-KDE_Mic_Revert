@@ -176,6 +176,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          ref: main
 
       - name: Download version file
         uses: actions/download-artifact@v4
@@ -183,11 +184,21 @@ jobs:
           name: version-info
           path: /tmp
 
-      - name: Update last_version.txt
+      - name: Update or create last_version.txt
         run: |
           VERSION=$(cat /tmp/version.txt)
+          
+          # Crear el archivo si no existe
+          if [ ! -f "last_version.txt" ]; then
+            echo "Creando last_version.txt por primera vez"
+            touch last_version.txt
+          fi
+          
           echo "$VERSION" > last_version.txt
           echo "Actualizado last_version.txt con versión: $VERSION"
+          
+          # Verificar que el archivo se creó/modificó
+          cat last_version.txt
 
       - name: Commit and push
         uses: stefanzweifel/git-auto-commit-action@v5
@@ -195,3 +206,6 @@ jobs:
           commit_message: "Update last_version.txt to ${{ needs.build.outputs.version }}"
           file_pattern: last_version.txt
           branch: main
+          commit_user_name: GitHub Actions
+          commit_user_email: actions@github.com
+          commit_author: GitHub Actions <actions@github.com>
