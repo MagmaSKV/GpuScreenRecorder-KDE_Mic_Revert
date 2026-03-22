@@ -8,7 +8,6 @@ on:
 permissions:
   contents: write
   packages: write
-  actions: read
 
 jobs:
   check-version:
@@ -25,15 +24,11 @@ jobs:
       - name: Get latest version from Arch PKGBUILD
         id: get-version
         run: |
-          # Descargar el PKGBUILD oficial de Arch
           curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD.official
-          
-          # Extraer la versión (pkgver=)
           VERSION=$(grep -Po '^pkgver=\K.*' PKGBUILD.official)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Versión encontrada: $VERSION"
           
-          # Leer la versión anterior si existe
           if [ -f "last_version.txt" ]; then
             LAST_VERSION=$(cat last_version.txt)
             echo "last_version=$LAST_VERSION" >> $GITHUB_OUTPUT
@@ -61,7 +56,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
-    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,7 +93,6 @@ jobs:
             gcc \
             ninja
           
-          # Crear usuario no root para makepkg
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
@@ -110,29 +105,19 @@ jobs:
           echo "Compilando versión: $VERSION"
 
       - name: Build package with patch
-        id: build
         run: |
-          # Crear directorio de trabajo
           mkdir -p /home/builder/build
           cd /home/builder/build
           
-          # Descargar el PKGBUILD oficial
           curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD
           
-          # NO cambiar el nombre del paquete (mantener gpu-screen-recorder)
-          # sed -i 's/^pkgname=.../' NO SE HACE
-          
-          # Cambiar pkgrel para que sea diferente al oficial
-          # El oficial usa pkgrel=1, nosotros usamos pkgrel=1.custom o similar
+          # Cambiar pkgrel a un número más alto
           sed -i 's/^pkgrel=1/pkgrel=999/' PKGBUILD
-          
-          # Añadir provides y conflicts (opcional pero recomendado)
-          sed -i '/^pkgrel=/a provides=("gpu-screen-recorder")\nconflicts=("gpu-screen-recorder")' PKGBUILD
           
           # Añadir optimizaciones x86-64-v3
           sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
           
-          # Crear la función prepare()
+          # Añadir prepare() function
           cat > /tmp/prepare_func << 'EOF'
           
           prepare() {
@@ -142,7 +127,6 @@ jobs:
           }
           EOF
           
-          # Insertar la función prepare() antes de build()
           awk -v prep="$(cat /tmp/prepare_func)" '
             /^build\(\)/ {
               print prep
@@ -152,46 +136,62 @@ jobs:
           ' PKGBUILD > PKGBUILD.tmp
           mv PKGBUILD.tmp PKGBUILD
           
-          # Verificar que el PKGBUILD quedo bien
-          echo "=== PKGBUILD modificado ==="
-          grep -E "pkgname|pkgver|pkgrel|prepare|build" PKGBUILD | head -20
-          
-          # Construir como usuario builder
           chown -R builder:builder .
           sudo -u builder makepkg -s --noconfirm
           
-          # Listar paquetes generados
-          ls -la *.pkg.tar.zst
-          
-          # Guardar nombre del archivo
-          PKG_FILE=$(ls *.pkg.tar.zst 2>/dev/null | head -1)
-          echo "pkg_file=$PKG_FILE" >> $GITHUB_OUTPUT
-          
-          # Copiar para el release
           mkdir -p /tmp/artifacts
           cp *.pkg.tar.zst /tmp/artifacts/
+          
+          # Guardar la versión para el siguiente job
+          echo "${{ steps.version.outputs.version }}" > /tmp/version.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gpu-screen-recorder-mic
+          name: gpu-screen-recorder-package
           path: /tmp/artifacts/*.pkg.tar.zst
+
+      - name: Upload version file
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-info
+          path: /tmp/version.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          name: GPU Screen Recorder Mic v${{ steps.version.outputs.version }}
+          name: GPU Screen Recorder v${{ steps.version.outputs.version }} (with mic icon)
           files: /tmp/artifacts/*.pkg.tar.zst
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Save version
-        run: echo "${{ steps.version.outputs.version }}" > last_version.txt
+  update-version:
+    needs: build
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Commit version file
+      - name: Download version file
+        uses: actions/download-artifact@v4
+        with:
+          name: version-info
+          path: /tmp
+
+      - name: Update last_version.txt
+        run: |
+          VERSION=$(cat /tmp/version.txt)
+          echo "$VERSION" > last_version.txt
+          echo "Actualizado last_version.txt con versión: $VERSION"
+
+      - name: Commit and push
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update version to ${{ steps.version.outputs.version }}"
+          commit_message: "Update last_version.txt to ${{ needs.build.outputs.version }}"
           file_pattern: last_version.txt
+          branch: main
