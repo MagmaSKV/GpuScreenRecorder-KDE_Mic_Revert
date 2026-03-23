@@ -161,13 +161,21 @@ jobs:
           cd /tmp/artifacts
           
           # Crear la base de datos del repositorio
+          echo "Creando base de datos del repositorio..."
           repo-add gpu-screen-recorder-mic.db.tar.zst *.pkg.tar.zst
           
-          # Copiar como .db para compatibilidad
-          cp gpu-screen-recorder-mic.db.tar.zst gpu-screen-recorder-mic.db
-          cp gpu-screen-recorder-mic.files.tar.zst gpu-screen-recorder-mic.files 2>/dev/null || true
+          # Crear enlaces simbólicos para compatibilidad con pacman
+          echo "Creando enlaces simbólicos..."
+          if [ -f "gpu-screen-recorder-mic.db.tar.zst" ]; then
+            ln -sf gpu-screen-recorder-mic.db.tar.zst gpu-screen-recorder-mic.db
+          fi
           
-          echo "Repositorio creado con éxito"
+          if [ -f "gpu-screen-recorder-mic.files.tar.zst" ]; then
+            ln -sf gpu-screen-recorder-mic.files.tar.zst gpu-screen-recorder-mic.files
+          fi
+          
+          echo "Archivos generados:"
+          ls -la
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -213,17 +221,15 @@ jobs:
           cp -r repo/* .
           rm -rf repo
           
-          # Crear o actualizar el archivo README
-          cat > README.md << 'EOF'
-          # GPU Screen Recorder - Repositorio Pacman
+          # Asegurarse de que los symlinks se mantengan
+          # (No es necesario hacer nada especial)
           
-          Este branch contiene los archivos del repositorio para pacman.
+          git add .
           
-          ## Añadir este repositorio
-          
-          Agrega la siguiente línea a `/etc/pacman.conf`:
-          
-          ```ini
-          [gsr-mic]
-          SigLevel = Optional TrustAll
-          Server = https://raw.githubusercontent.com/MagmaSKV/GpuScreenRecorder-KDE_Mic_Revert/repo
+          if ! git diff --cached --quiet; then
+            git commit -m "Update repo to latest version"
+            git push origin repo
+            echo "Branch repo actualizado"
+          else
+            echo "No hay cambios en el repositorio"
+          fi
