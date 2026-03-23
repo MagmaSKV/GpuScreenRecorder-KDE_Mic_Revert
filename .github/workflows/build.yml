@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install dependencies
+      - name: Install dependencies (lightweight)
         run: |
           sudo apt-get update
           sudo apt-get install -y curl jq
@@ -126,7 +126,7 @@ jobs:
           curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD
           
           # Cambiar pkgrel a un número más alto
-          sed -i 's/^pkgrel=1/pkgrel=310/' PKGBUILD
+          sed -i 's/^pkgrel=1/pkgrel=999/' PKGBUILD
           
           # Añadir optimizaciones x86-64-v3
           sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
@@ -160,21 +160,19 @@ jobs:
         run: |
           cd /tmp/artifacts
           
-          # Crear la base de datos del repositorio
-          echo "Creando base de datos del repositorio..."
-          repo-add gpu-screen-recorder-mic.db.tar.zst *.pkg.tar.zst
+          # Crear la base de datos del repositorio con nombre gsr-mic (más corto)
+          repo-add gsr-mic.db.tar.zst *.pkg.tar.zst
           
-          # Crear enlaces simbólicos para compatibilidad con pacman
-          echo "Creando enlaces simbólicos..."
-          if [ -f "gpu-screen-recorder-mic.db.tar.zst" ]; then
-            ln -sf gpu-screen-recorder-mic.db.tar.zst gpu-screen-recorder-mic.db
+          # Crear enlaces simbólicos para compatibilidad
+          if [ -f "gsr-mic.db.tar.zst" ]; then
+            ln -sf gsr-mic.db.tar.zst gsr-mic.db
           fi
           
-          if [ -f "gpu-screen-recorder-mic.files.tar.zst" ]; then
-            ln -sf gpu-screen-recorder-mic.files.tar.zst gpu-screen-recorder-mic.files
+          if [ -f "gsr-mic.files.tar.zst" ]; then
+            ln -sf gsr-mic.files.tar.zst gsr-mic.files
           fi
           
-          echo "Archivos generados:"
+          echo "Repositorio creado con éxito"
           ls -la
 
       - name: Upload artifacts
@@ -217,19 +215,24 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
-          # Mover los archivos al directorio raíz
+          # Limpiar archivos antiguos del repositorio
+          find . -type f \( -name "*.db" -o -name "*.db.tar.zst" -o -name "*.files" -o -name "*.files.tar.zst" -o -name "*.pkg.tar.zst" \) -delete
+          
+          # Copiar los nuevos archivos
           cp -r repo/* .
           rm -rf repo
           
-          # Asegurarse de que los symlinks se mantengan
-          # (No es necesario hacer nada especial)
+          # Crear README actualizado
+          cat > README.md << 'EOF'
+          # GPU Screen Recorder - Repositorio Pacman
           
-          git add .
+          Este branch contiene los archivos del repositorio para pacman.
           
-          if ! git diff --cached --quiet; then
-            git commit -m "Update repo to latest version"
-            git push origin repo
-            echo "Branch repo actualizado"
-          else
-            echo "No hay cambios en el repositorio"
-          fi
+          ## Añadir este repositorio
+          
+          Agrega la siguiente línea a `/etc/pacman.conf` **ANTES** que `cachyos-extra-v3`:
+          
+          ```ini
+          [gsr-mic]
+          SigLevel = Optional TrustAll
+          Server = https://raw.githubusercontent.com/MagmaSKV/GpuScreenRecorder-KDE_Mic_Revert/repo
