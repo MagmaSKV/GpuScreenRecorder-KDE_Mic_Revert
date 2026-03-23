@@ -126,7 +126,7 @@ jobs:
           curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD
           
           # Cambiar pkgrel a un número más alto
-          sed -i 's/^pkgrel=1/pkgrel=999/' PKGBUILD
+          sed -i 's/^pkgrel=1/pkgrel=310/' PKGBUILD
           
           # Añadir optimizaciones x86-64-v3
           sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
@@ -214,11 +214,11 @@ jobs:
           
           # Copiar los archivos al directorio raíz
           cp -r repo/* .
-          
+
           if [[ -n $(git status -s) ]]; then
-          git add .
-          git commit -m "Actualizar repositorio - v${{ needs.build.outputs.version }}"
-          git push origin repo
+            git add .
+            git commit -m "Actualizar repositorio - v${{ needs.build.outputs.version }}"
+            git push origin repo
           else
-          echo "No hay cambios para commitear"
+            echo "No hay cambios para commitear"
           fi
