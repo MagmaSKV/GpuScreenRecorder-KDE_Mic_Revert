@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install dependencies (lightweight)
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y curl jq
@@ -73,8 +73,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -163,19 +161,13 @@ jobs:
           cd /tmp/artifacts
           
           # Crear la base de datos del repositorio
-          repo-add gsr-mic.db.tar.zst *.pkg.tar.zst
+          repo-add gpu-screen-recorder-mic.db.tar.zst *.pkg.tar.zst
           
-          # Crear enlaces simbólicos para compatibilidad
-          if [ -f "gsr-mic.db.tar.zst" ]; then
-            ln -sf gsr-mic.db.tar.zst gsr-mic.db
-          fi
-          
-          if [ -f "gsr-mic.files.tar.zst" ]; then
-            ln -sf gsr-mic.files.tar.zst gsr-mic.files
-          fi
+          # Copiar como .db para compatibilidad
+          cp gpu-screen-recorder-mic.db.tar.zst gpu-screen-recorder-mic.db
+          cp gpu-screen-recorder-mic.files.tar.zst gpu-screen-recorder-mic.files 2>/dev/null || true
           
           echo "Repositorio creado con éxito"
-          ls -la
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -196,6 +188,7 @@ jobs:
 
   update-repo-branch:
     needs: build
+    if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo branch
@@ -216,14 +209,21 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
-          # Limpiar archivos antiguos
-          find . -maxdepth 1 -type f \( -name "*.db" -o -name "*.db.tar.zst" -o -name "*.files" -o -name "*.files.tar.zst" -o -name "*.pkg.tar.zst" \) -delete
+          # Mover los archivos al directorio raíz
+          cp -r repo/* .
+          rm -rf repo
           
-          # Copiar los nuevos archivos
-          if [ -d "./repo" ] && [ "$(ls -A ./repo 2>/dev/null)" ]; then
-            cp -v repo/* .
-            rm -rf repo
-          else
-            echo "No hay archivos para copiar"
-            exit 1
-          fi
+          # Crear o actualizar el archivo README
+          cat > README.md << 'EOF'
+          # GPU Screen Recorder - Repositorio Pacman
+          
+          Este branch contiene los archivos del repositorio para pacman.
+          
+          ## Añadir este repositorio
+          
+          Agrega la siguiente línea a `/etc/pacman.conf`:
+          
+          ```ini
+          [gsr-mic]
+          SigLevel = Optional TrustAll
+          Server = https://raw.githubusercontent.com/MagmaSKV/GpuScreenRecorder-KDE_Mic_Revert/repo
