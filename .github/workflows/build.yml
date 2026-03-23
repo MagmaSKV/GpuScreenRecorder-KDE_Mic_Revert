@@ -194,42 +194,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  update-repo-branch:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo branch
-        uses: actions/checkout@v4
-        with:
-          ref: repo
-          fetch-depth: 1
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: repo-files
-          path: ./repo
-
-      - name: Update repo branch
-        run: |
-          # Configurar git
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          
-          # Limpiar archivos antiguos
-          find . -maxdepth 1 -type f \( -name "*.db" -o -name "*.db.tar.zst" -o -name "*.files" -o -name "*.files.tar.zst" -o -name "*.pkg.tar.zst" \) -delete
-          
-          # Copiar los nuevos archivos
-          if [ -d "./repo" ] && [ "$(ls -A ./repo 2>/dev/null)" ]; then
-            cp -v repo/* .
-            rm -rf repo
-          else
-            echo "No hay archivos para copiar"
-            exit 1
-          fi
-          
-          # Crear README
-          cat > README.md << 'EOF'
+  - name: Update repo branch
+  run: |
+    # Configurar git
+    git config user.name "GitHub Actions"
+    git config user.email "actions@github.com"
+    
+    # Limpiar archivos antiguos
+    find . -maxdepth 1 -type f \( -name "*.db" -o -name "*.db.tar.zst" -o -name "*.files" -o -name "*.files.tar.zst" -o -name "*.pkg.tar.zst" \) -delete
+    
+    # Copiar los nuevos archivos
+    if [ -d "./repo" ] && [ "$(ls -A ./repo 2>/dev/null)" ]; then
+      cp -v repo/* .
+      rm -rf repo
+    else
+      echo "No hay archivos para copiar"
+      exit 1
+    fi
+    
+    # Crear README - EL EOF DEBE ESTAR SIN ESPACIOS
+    cat > README.md << 'EOF'
 # GPU Screen Recorder - Repositorio Pacman
 
 Este branch contiene los archivos del repositorio para pacman.
