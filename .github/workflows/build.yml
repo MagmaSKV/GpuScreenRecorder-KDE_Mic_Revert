@@ -73,6 +73,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}  # <-- Agrega esta línea
     steps:
       - name: Checkout
         uses: actions/checkout@v4
