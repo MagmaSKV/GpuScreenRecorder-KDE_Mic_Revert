@@ -8,6 +8,8 @@ on:
 permissions:
   contents: write
   packages: write
+  pages: write
+  id-token: write
 
 jobs:
   check-version:
@@ -18,8 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
       - name: Install dependencies
         run: |
@@ -47,7 +47,6 @@ jobs:
             echo "Último release en GitHub: $LATEST_VERSION"
           else
             echo "latest_version=" >> $GITHUB_OUTPUT
-            echo "No hay releases previos"
           fi
 
       - name: Check if build needed
@@ -56,12 +55,9 @@ jobs:
           CURRENT="${{ steps.version.outputs.current_version }}"
           LATEST="${{ steps.release.outputs.latest_version }}"
           
-          if [ -z "$LATEST" ]; then
+          if [ -z "$LATEST" ] || [ "$CURRENT" != "$LATEST" ]; then
             echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "No hay releases previos. Se construirá versión $CURRENT"
-          elif [ "$CURRENT" != "$LATEST" ]; then
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "Nueva versión detectada: $CURRENT (anterior: $LATEST)"
+            echo "Construyendo versión: $CURRENT"
           else
             echo "should_build=false" >> $GITHUB_OUTPUT
             echo "Ya está actualizado: $CURRENT"
@@ -125,8 +121,8 @@ jobs:
           
           curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD
           
-          # Cambiar pkgrel a un número más alto
-          sed -i 's/^pkgrel=1/pkgrel=999/' PKGBUILD
+          # Cambiar pkgver a usar sufijo .mic
+          sed -i 's/^pkgrel=1/pkgrel=1.mic/' PKGBUILD
           
           # Añadir optimizaciones x86-64-v3
           sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
@@ -155,14 +151,26 @@ jobs:
           
           mkdir -p /tmp/artifacts
           cp *.pkg.tar.zst /tmp/artifacts/
+          
+          # Renombrar para que tenga el sufijo .mic (por si acaso)
+          for f in /tmp/artifacts/*.pkg.tar.zst; do
+            mv "$f" "$(echo $f | sed 's/-999-/-1.mic-/')"
+          done
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Create repo database
+        run: |
+          cd /tmp/artifacts
+          # Crear base de datos del repositorio
+          repo-add gpu-screen-recorder.db.tar.gz *.pkg.tar.zst
+          repo-add gpu-screen-recorder.files.tar.gz *.pkg.tar.zst
+          ls -la
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: gpu-screen-recorder-package
-          path: /tmp/artifacts/*.pkg.tar.zst
+          path: /tmp/artifacts/
 
-      - name: Create Release
+      - name: Create Release (backup)
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
@@ -172,3 +180,18 @@ jobs:
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    needs: build
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
