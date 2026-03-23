@@ -192,60 +192,27 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  update-repo-branch:
-    needs: build
-    if: always() && needs.build.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo branch
-        uses: actions/checkout@v4
-        with:
-          ref: repo
-          fetch-depth: 1
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: repo-files
-          path: ./repo
-        continue-on-error: true
-
-      - name: Check if artifacts exist
-        id: check-artifacts
-        run: |
-          if [ -d "./repo" ] && [ "$(ls -A ./repo 2>/dev/null)" ]; then
-            echo "Artifacts encontrados:"
-            ls -la ./repo
-            echo "has_artifacts=true" >> $GITHUB_OUTPUT
-          else
-            echo "No hay artifacts para actualizar"
-            echo "has_artifacts=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Update repo branch
-        if: steps.check-artifacts.outputs.has_artifacts == 'true'
-        run: |
-          # Configurar git
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          
-          # Limpiar archivos antiguos del repositorio (excepto .git y README.md)
-          find . -maxdepth 1 -type f \( -name "*.db" -o -name "*.db.tar.zst" -o -name "*.files" -o -name "*.files.tar.zst" -o -name "*.pkg.tar.zst" \) -delete
-          
-          # Copiar los nuevos archivos
-          cp -r repo/* .
-          
-          # Crear README actualizado
-          cat > README.md << 'EOF'
-          # GPU Screen Recorder - Repositorio Pacman
-          
-          Este branch contiene los archivos del repositorio para pacman.
-          
-          ## Añadir este repositorio
-          
-          Agrega la siguiente línea a `/etc/pacman.conf` **ANTES** que `cachyos-extra-v3`:
-          
-          ```ini
-          [gsr-mic]
-          SigLevel = Optional TrustAll
-          Server = https://raw.githubusercontent.com/MagmaSKV/GpuScreenRecorder-KDE_Mic_Revert/repo
+  - name: Update repo branch
+    run: |
+      # Configurar git
+      git config user.name "GitHub Actions"
+      git config user.email "actions@github.com"
+      
+      # Mover los archivos al directorio raíz
+      cp -r repo/* .
+      rm -rf repo
+      
+      # Crear o actualizar el archivo README
+      cat > README.md << 'EOF'
+      # GPU Screen Recorder - Repositorio Pacman
+      
+      Este branch contiene los archivos del repositorio para pacman.
+      
+      ## Añadir este repositorio
+      
+      Agrega la siguiente línea a `/etc/pacman.conf`:
+      
+      ```ini
+      [gsr-mic]
+      SigLevel = Optional TrustAll
+      Server = https://raw.githubusercontent.com/MagmaSKV/GpuScreenRecorder-KDE_Mic_Revert/repo
