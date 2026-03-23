@@ -212,8 +212,9 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
-          # Copiar los archivos al directorio raíz
+          # Copiar TODOS los archivos al directorio raíz
           cp -r repo/* .
+          rm -rf repo
 
           if [[ -n $(git status -s) ]]; then
             git add .
