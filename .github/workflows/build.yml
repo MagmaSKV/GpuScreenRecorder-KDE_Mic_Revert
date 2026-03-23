@@ -211,18 +211,3 @@ jobs:
       echo "No hay archivos para copiar"
       exit 1
     fi
-    
-    # Crear README - EL EOF DEBE ESTAR SIN ESPACIOS
-    cat > README.md << 'EOF'
-# GPU Screen Recorder - Repositorio Pacman
-
-Este branch contiene los archivos del repositorio para pacman.
-
-## Añadir este repositorio
-
-Agrega la siguiente línea a `/etc/pacman.conf` **ANTES** que `cachyos-extra-v3`:
-
-```ini
-[gsr-mic]
-SigLevel = Optional TrustAll
-Server = https://raw.githubusercontent.com/MagmaSKV/GpuScreenRecorder-KDE_Mic_Revert/repo
