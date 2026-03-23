@@ -131,7 +131,7 @@ jobs:
           # Añadir optimizaciones x86-64-v3
           sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
           
-          # Añadir prepare() function
+          # Añadir prepare()
           cat > /tmp/prepare_func << 'EOF'
           
           prepare() {
