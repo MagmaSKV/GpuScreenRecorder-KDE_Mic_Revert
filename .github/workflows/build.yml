@@ -126,7 +126,7 @@ jobs:
           curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD
           
           # Cambiar pkgrel a un número más alto
-          sed -i 's/^pkgrel=1/pkgrel=310/' PKGBUILD
+          sed -i 's/^pkgrel=1/pkgrel=999/' PKGBUILD
           
           # Añadir optimizaciones x86-64-v3
           sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
@@ -156,11 +156,24 @@ jobs:
           mkdir -p /tmp/artifacts
           cp *.pkg.tar.zst /tmp/artifacts/
 
-      - name: Upload artifact
+      - name: Create repo database
+        run: |
+          cd /tmp/artifacts
+          
+          # Crear la base de datos del repositorio
+          repo-add gpu-screen-recorder-mic.db.tar.zst *.pkg.tar.zst
+          
+          # Copiar como .db para compatibilidad
+          cp gpu-screen-recorder-mic.db.tar.zst gpu-screen-recorder-mic.db
+          cp gpu-screen-recorder-mic.files.tar.zst gpu-screen-recorder-mic.files 2>/dev/null || true
+          
+          echo "Repositorio creado con éxito"
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: gpu-screen-recorder-package
-          path: /tmp/artifacts/*.pkg.tar.zst
+          name: repo-files
+          path: /tmp/artifacts/*
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -172,3 +185,45 @@ jobs:
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-repo-branch:
+    needs: build
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo branch
+        uses: actions/checkout@v4
+        with:
+          ref: repo
+          fetch-depth: 1
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: repo-files
+          path: ./repo
+
+      - name: Update repo branch
+        run: |
+          # Configurar git
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Mover los archivos al directorio raíz
+          cp -r repo/* .
+          rm -rf repo
+          
+          # Crear o actualizar el archivo README
+          cat > README.md << 'EOF'
+          # GPU Screen Recorder - Repositorio Pacman
+          
+          Este branch contiene los archivos del repositorio para pacman.
+          
+          ## Añadir este repositorio
+          
+          Agrega la siguiente línea a `/etc/pacman.conf`:
+          
+          ```ini
+          [gsr-mic]
+          SigLevel = Optional TrustAll
+          Server = https://raw.githubusercontent.com/MagmaSKV/GpuScreenRecorder-KDE_Mic_Revert/repo
