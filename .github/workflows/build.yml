@@ -121,14 +121,17 @@ jobs:
           
           curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD
           
-          # Cambiar pkgver a usar sufijo .mic
-          sed -i 's/^pkgrel=1/pkgrel=1.mic/' PKGBUILD
+          # Modificar pkgver para añadir sufijo .mic (ej: 5.12.5 -> 5.12.5.mic)
+          sed -i 's/^pkgver=\(.*\)/pkgver=\1.mic/' PKGBUILD
+          
+          # Mantener pkgrel=1 (o aumentarlo si quieres)
+          # No modificamos pkgrel, dejamos que sea 1
           
           # Añadir optimizaciones x86-64-v3
           sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' PKGBUILD
           
           # Añadir prepare() function
-          cat > /tmp/prepare_func << 'EOF'
+          cat >> PKGBUILD << 'EOF'
           
           prepare() {
             cd "$srcdir/gpu-screen-recorder"
@@ -137,25 +140,11 @@ jobs:
           }
           EOF
           
-          awk -v prep="$(cat /tmp/prepare_func)" '
-            /^build\(\)/ {
-              print prep
-              print ""
-            }
-            { print }
-          ' PKGBUILD > PKGBUILD.tmp
-          mv PKGBUILD.tmp PKGBUILD
-          
           chown -R builder:builder .
           sudo -u builder makepkg -s --noconfirm
           
           mkdir -p /tmp/artifacts
           cp *.pkg.tar.zst /tmp/artifacts/
-          
-          # Renombrar para que tenga el sufijo .mic (por si acaso)
-          for f in /tmp/artifacts/*.pkg.tar.zst; do
-            mv "$f" "$(echo $f | sed 's/-999-/-1.mic-/')"
-          done
 
       - name: Create repo database
         run: |
