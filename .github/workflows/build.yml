@@ -198,7 +198,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          name: GPU Screen Recorder v${{ steps.version.outputs.version }} (with mic icon)
+          name: GPU Screen Recorder v${{ steps.version.outputs.version }} (with mic icon + support older NVIDIA)
           files: /tmp/artifacts/*.pkg.tar.zst
           generate_release_notes: true
           make_latest: true
