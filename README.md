@@ -6,6 +6,8 @@ Este repositorio compila automáticamente [gpu-screen-recorder](https://git.dec0
 
 Revertir el commit [`ff030ba`](https://github.com/dec05eba/gpu-screen-recorder/commit/ff030ba63f8d109618cbb69d759a5ce4c3cd802f) que eliminó la funcionalidad que mostraba el ícono del micrófono en el área de notificaciones de KDE cuando estaba en uso.
 
+Tambien soporte para NVIDIAs igual o mas viejas a la GTX 1080 usando `-Dffmpeg_static=true`
+
 ## 📦 Instalación
 
 ### Opción 1: GitHub Releases
