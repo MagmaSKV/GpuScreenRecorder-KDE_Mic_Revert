@@ -158,8 +158,6 @@ jobs:
 
 
           # Añadir nuestro revert
-          cat >> PKGBUILD <<'EOF'
-
           printf '%s\n' \
           'prepare() {' \
           '  cd "$srcdir/gpu-screen-recorder"' \
