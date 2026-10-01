@@ -26,11 +26,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl jq
 
-      - name: Get latest version from Arch PKGBUILD
+      - name: Get latest version from Arch packaging repo
         id: version
         run: |
-          curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD.official
-          VERSION=$(grep -Po '^pkgver=\K.*' PKGBUILD.official)
+          git clone --depth=1 \
+            https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder.git \
+            arch-package
+
+          VERSION=$(grep -Po '^pkgver=\K.*' arch-package/PKGBUILD)
+
           echo "current_version=$VERSION" >> $GITHUB_OUTPUT
           echo "Versión actual en Arch: $VERSION"
 
@@ -124,37 +128,53 @@ jobs:
         run: |
           mkdir -p /home/builder/build
           cd /home/builder/build
-          
-          curl -s "https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder/-/raw/main/PKGBUILD?ref_type=heads" > PKGBUILD
-          
-          # Cambiar pkgrel a un número más alto
-          sed -i 's/^pkgrel=1/pkgrel=310/' PKGBUILD
-          
+
+          git clone --depth=1 \
+            https://gitlab.archlinux.org/archlinux/packaging/packages/gpu-screen-recorder.git \
+            packaging
+
+          cd packaging
+
+          echo "Contenido del packaging:"
+          ls -la
+
+          # Subir pkgrel para diferenciar nuestro paquete
+          sed -i 's/^pkgrel=.*/pkgrel=310/' PKGBUILD
+
           # Añadir optimizaciones x86-64-v3
-          sed -i 's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3" -Dffmpeg_static=true/' PKGBUILD
-          
-          # Añadir prepare()
-          cat > /tmp/prepare_func << 'EOF'
-          
-          prepare() {
-            cd "$srcdir/gpu-screen-recorder"
-            echo "Revertiendo commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f..."
-            git revert --no-commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f || echo "El revert falló, continuando..."
-          }
-          EOF
-          
-          awk -v prep="$(cat /tmp/prepare_func)" '
-            /^build\(\)/ {
-              print prep
-              print ""
-            }
-            { print }
-          ' PKGBUILD > PKGBUILD.tmp
-          mv PKGBUILD.tmp PKGBUILD
-          
+          sed -i \
+            's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3" -Dffmpeg_static=true/' \
+            PKGBUILD
+
+
+          # Si Arch quitó el .install pero PKGBUILD todavía lo referencia,
+          # eliminamos esa referencia
+          if grep -q "gpu-screen-recorder.install" PKGBUILD; then
+            if [ ! -f gpu-screen-recorder.install ]; then
+              echo "El .install no existe, eliminando referencia"
+              sed -i '/gpu-screen-recorder\.install/d' PKGBUILD
+            fi
+          fi
+
+
+          # Añadir nuestro revert
+          cat >> PKGBUILD <<'EOF'
+
+
+      prepare() {
+        cd "$srcdir/gpu-screen-recorder"
+
+        echo "Revirtiendo commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f..."
+
+        git revert --no-commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f || echo "El revert falló, continuando..."
+      }
+      EOF
+
+
           chown -R builder:builder .
+
           sudo -u builder makepkg -s --noconfirm
-          
+
           mkdir -p /tmp/artifacts
           cp *.pkg.tar.zst /tmp/artifacts/
 
@@ -191,7 +211,7 @@ jobs:
 
   update-repo-branch:
     needs: build
-    if: always() && needs.build.result == 'success'
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
