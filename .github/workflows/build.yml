@@ -141,11 +141,10 @@ jobs:
           # Subir pkgrel para diferenciar nuestro paquete
           sed -i 's/^pkgrel=.*/pkgrel=310/' PKGBUILD
 
-          # Añadir optimizaciones x86-64-v3
+          # Añadir optimizaciones x86-64-v3 y ffmpeg estático
           sed -i \
-            's/meson setup build/meson setup build -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3" -Dffmpeg_static=true/' \
+            's/arch-meson build -Dsystemd=true -Dffmpeg_static=false/arch-meson build -Dsystemd=true -Dffmpeg_static=true -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' \
             PKGBUILD
-
 
           # Si Arch quitó el .install pero PKGBUILD todavía lo referencia,
           # eliminamos esa referencia
