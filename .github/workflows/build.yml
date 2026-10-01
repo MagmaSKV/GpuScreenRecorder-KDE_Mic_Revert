@@ -160,16 +160,15 @@ jobs:
           # Añadir nuestro revert
           cat >> PKGBUILD <<'EOF'
 
-
-      prepare() {
-        cd "$srcdir/gpu-screen-recorder"
-
-        echo "Revirtiendo commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f..."
-
-        git revert --no-commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f || echo "El revert falló, continuando..."
-      }
-      EOF
-
+          printf '%s\n' \
+          'prepare() {' \
+          '  cd "$srcdir/gpu-screen-recorder"' \
+          '' \
+          '  echo "Revirtiendo commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f..."' \
+          '' \
+          '  git revert --no-commit ff030ba63f8d109618cbb69d759a5ce4c3cd802f || echo "El revert falló, continuando..."' \
+          '}' \
+          >> PKGBUILD
 
           chown -R builder:builder .
 
