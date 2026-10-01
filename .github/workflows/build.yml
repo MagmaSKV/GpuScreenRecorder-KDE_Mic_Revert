@@ -112,7 +112,11 @@ jobs:
             nlohmann-json \
             python \
             gcc \
-            ninja
+            ninja \
+            nasm \
+            yasm \
+            pkgconf \
+            python-setuptools
           
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
@@ -141,10 +145,12 @@ jobs:
           # Subir pkgrel para diferenciar nuestro paquete
           sed -i 's/^pkgrel=.*/pkgrel=310/' PKGBUILD
 
-          # Añadir optimizaciones x86-64-v3 y ffmpeg estático
+          # Activar ffmpeg estático + x86-64-v3 + permitir wraps
           sed -i \
-            's/arch-meson build -Dsystemd=true -Dffmpeg_static=false/arch-meson build -Dsystemd=true -Dffmpeg_static=true -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3"/' \
+            's/arch-meson build -Dsystemd=true -Dffmpeg_static=false --buildtype=release -Dstrip=true/arch-meson build -Dsystemd=true -Dffmpeg_static=true --wrap-mode=default -Dc_args="-march=x86-64-v3" -Dcpp_args="-march=x86-64-v3" --buildtype=release -Dstrip=true/' \
             PKGBUILD
+
+          grep arch-meson PKGBUILD
 
           # Si Arch quitó el .install pero PKGBUILD todavía lo referencia,
           # eliminamos esa referencia
